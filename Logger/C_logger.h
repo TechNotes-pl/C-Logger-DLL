@@ -9,8 +9,10 @@ extern "C" {
 #include <string.h>
 #include "Logger.h";
 
+constexpr int ErrBufferLen = 80;
+
 /**
- * Initialize the logger as a console logger.
+ * \brief Initialize the logger as a console logger.
  * If the file pointer is NULL, stdout will be used.
  *
  * @param[in] output A file pointer. Make sure to set stdout or stderr.
@@ -19,7 +21,7 @@ extern "C" {
 int logger_initConsoleLogger(FILE* output);
 
 /**
- * Initialize the logger as a file logger.
+ * \brief Initialize the logger as a file logger.
  * If the filename is NULL, return without doing anything.
  *
  * @param[in] filename The name of the output file
@@ -30,7 +32,7 @@ int logger_initConsoleLogger(FILE* output);
 int logger_initFileLogger(const char* filename, long maxFileSize, unsigned char maxBackupFiles);
 
 /**
- * Set the log level.
+ * \brief Set the log level.
  * Message levels lower than this value will be discarded.
  * The default log level is INFO.
  *
@@ -39,7 +41,7 @@ int logger_initFileLogger(const char* filename, long maxFileSize, unsigned char 
 void logger_setLevel(LogLevel level);
 
 /**
- * Get the log level that has been set.
+ * \brief Get the log level that has been set.
  * The default log level is INFO.
  *
  * @return The log level
@@ -47,14 +49,14 @@ void logger_setLevel(LogLevel level);
 LogLevel logger_getLevel(void);
 
 /**
- * Check if a message of the level would actually be logged.
+ * \brief Check if a message of the level would actually be logged.
  *
  * @return Non-zero value if the log level is enabled
  */
 int logger_isEnabled(LogLevel level);
 
 /**
- * Flush automatically.
+ * \brief Flush automatically.
  * Auto flush is off in default.
  *
  * @param[in] interval A fulsh interval in milliseconds. Switch off if 0 or a negative integer.
@@ -62,12 +64,12 @@ int logger_isEnabled(LogLevel level);
 void logger_autoFlush(long interval);
 
 /**
- * Flush buffered log messages.
+ * \brief Flush buffered log messages.
  */
 void logger_flush(void);
 
 /**
- * Log a message.
+ * \brief Log a message.
  * Make sure to call one of the following initialize functions before starting logging.
  * - logger_initConsoleLogger()
  * - logger_initFileLogger()

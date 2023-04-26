@@ -41,6 +41,7 @@ int logger_configure(const char* filename)
 {
     FILE* fp;
     char line[kMaxLineLen];
+    errno_t err;
 
     if (filename == NULL) {
         assert(0 && "filename must not be NULL");
@@ -48,10 +49,14 @@ int logger_configure(const char* filename)
     }
 
     reset();
-    if ((fp = fopen(filename, "r")) == NULL) {
-        fprintf(stderr, "ERROR: loggerconf: Failed to open file: `%s`\n", filename);
+
+    if ((err = fopen_s(&fp, filename, "r")) != 0) {
+        char buffer[ErrBufferLen + 1]{};
+        strerror_s(buffer, ErrBufferLen, err);
+        fprintf(stderr, "ERROR: loggerconf: Failed to open file '%s': %s\n", s_flog.filename, buffer);
         return 0;
     }
+
     while (fgets(line, sizeof(line), fp) != NULL) {
         removeComments(line);
         trim(line);
