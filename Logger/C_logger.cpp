@@ -16,13 +16,6 @@
 #endif /* defined(_WIN32) || defined(_WIN64) */
 #include "C_logger.h"
 
- /* Logger type */
-enum {
-   
-    kConsoleLogger = 1 << 0,
-    kFileLogger = 1 << 1   
-};
-
 const auto kMaxFileNameLen = 255; /* without null character */
 const auto kDefaultMaxFileSize = 1048576L; /* 1 MB */
 

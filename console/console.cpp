@@ -1,5 +1,6 @@
 #include <iostream>
 #include "Logger.h"
+#include "loggerconf.h"
 
 template <typename T, typename U>
 constexpr auto MAX(T a, U b) { return (((a) > (b)) ? (a) : (b)); }
@@ -7,6 +8,9 @@ constexpr auto MAX(T a, U b) { return (((a) > (b)) ? (a) : (b)); }
 int main()
 {
     std::cout << "Hello World!\n";
+
+    CLog::LoggerConf::logger_configure("C:/temp/clog.conf");
+    //CLog::LoggerConf conf;
 
     // Console 
     InitConsoleLogger(stderr);
@@ -22,4 +26,6 @@ int main()
     LOG_DEBUG("Simple text");
     LOG_DEBUG("Simple debug  %d", 1);
     LOG_DEBUG("format example: %d%c%s", 1, '2', "3");
+
+
 }

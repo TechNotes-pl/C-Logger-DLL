@@ -5,104 +5,77 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <iostream>
 #include "C_logger.h"
 #include "loggerconf.h"
 
-enum {
-    /* Logger type */
-    kConsoleLogger = 1 << 0,
-    kFileLogger = 1 << 1,
+using namespace CLog;
 
-    kMaxFileNameLen = 256,
-    kMaxLineLen = 512,
-};
+ int LoggerConf::logger_configure(const char* filename) {
+     FILE* fp;
+     char line[kMaxLineLen];
+     errno_t err;
 
-/* Console logger */
-static struct {
-    FILE* output;
-} s_clog;
+     if (filename == NULL) {
+         assert(0 && "filename must not be NULL");
+         return 0;
+     }
 
-/* File logger */
-static struct {
-    char filename[kMaxFileNameLen];
-    long maxFileSize;
-    unsigned char maxBackupFiles;
-} s_flog;
+     reset();
 
-static int s_logger;
+     if ((err = fopen_s(&fp, filename, "r")) != 0) {
+         char buffer[ErrBufferLen + 1]{};
+         strerror_s(buffer, ErrBufferLen, err);
+         fprintf(stderr, "ERROR: loggerconf: Failed to open file '%s': %s\n", m_filename, buffer);
+         return 0;
+     }
 
-static void reset(void);
-static void removeComments(char* s);
-static void trim(char* s);
-static void parseLine(char* line);
-static int hasFlag(int flags, int flag);
+     while (fgets(line, sizeof(line), fp) != NULL) {
+         removeComments(line);
+         trim(line);
+         if (line[0] == '\0') {
+             continue;
+         }
+         parseLine(line);
+     }
+     fclose(fp);
 
-int logger_configure(const char* filename)
-{
-    FILE* fp;
-    char line[kMaxLineLen];
-    errno_t err;
+     if (hasFlag(s_logger, kConsoleLogger)) {
+         if (!logger_initConsoleLogger(m_filepoint)) {
+             return 0;
+         }
+     }
+     if (hasFlag(s_logger, kFileLogger)) {
+         if (!logger_initFileLogger(m_filename, maxFileSize, maxBackupFiles)) {
+             return 0;
+         }
+     }
+     if (s_logger == 0) {
+         return 0;
+     }
+     return 1;
+ }
 
-    if (filename == NULL) {
-        assert(0 && "filename must not be NULL");
-        return 0;
-    }
+ void LoggerConf::reset(void) {
+     s_logger = 0;
+     m_filepoint = nullptr;   // ??
 
-    reset();
+     memset(m_filename, 0, kMaxFileNameLen);
+     maxFileSize = 0;
+     maxBackupFiles = 0;
+ }
 
-    if ((err = fopen_s(&fp, filename, "r")) != 0) {
-        char buffer[ErrBufferLen + 1]{};
-        strerror_s(buffer, ErrBufferLen, err);
-        fprintf(stderr, "ERROR: loggerconf: Failed to open file '%s': %s\n", s_flog.filename, buffer);
-        return 0;
-    }
+ void LoggerConf::removeComments(char* s) {
+     int i;
 
-    while (fgets(line, sizeof(line), fp) != NULL) {
-        removeComments(line);
-        trim(line);
-        if (line[0] == '\0') {
-            continue;
-        }
-        parseLine(line);
-    }
-    fclose(fp);
+     for (i = 0; s[i] != '\0'; i++) {
+         if (s[i] == '#') {
+             s[i] = '\0';
+         }
+     }
+ }
 
-    if (hasFlag(s_logger, kConsoleLogger)) {
-        if (!logger_initConsoleLogger(s_clog.output)) {
-            return 0;
-        }
-    }
-    if (hasFlag(s_logger, kFileLogger)) {
-        if (!logger_initFileLogger(s_flog.filename, s_flog.maxFileSize, s_flog.maxBackupFiles)) {
-            return 0;
-        }
-    }
-    if (s_logger == 0) {
-        return 0;
-    }
-    return 1;
-}
-
-static void reset(void)
-{
-    s_logger = 0;
-    memset(&s_clog, 0, sizeof(s_clog));
-    memset(&s_flog, 0, sizeof(s_flog));
-}
-
-static void removeComments(char* s)
-{
-    int i;
-
-    for (i = 0; s[i] != '\0'; i++) {
-        if (s[i] == '#') {
-            s[i] = '\0';
-        }
-    }
-}
-
-static void trim(char* s)
-{
+void LoggerConf::trim(char* s) {
     size_t len;
     int i;
 
@@ -122,73 +95,81 @@ static void trim(char* s)
     s[len - i] = '\0';
 }
 
-static LogLevel parseLevel(const char* s);
-
-static void parseLine(char* line)
-{
-    char *key, *val;
-    int nfiles;
-
-    key = strtok(line, "=");
-    val = strtok(NULL, "=");
+void LoggerConf::parseLine(char* line) {
+    auto key = strtok(line, "=");
+    auto val = strtok(NULL, "=");
 
     if (strcmp(key, "level") == 0) {
         logger_setLevel(parseLevel(val));
-    } else if (strcmp(key, "autoFlush") == 0) {
+    }
+    else if (strcmp(key, "autoFlush") == 0) {
         logger_autoFlush(atol(val));
-    } else if (strcmp(key, "logger") == 0) {
+    }
+    else if (strcmp(key, "logger") == 0) {
         if (strcmp(val, "console") == 0) {
             s_logger |= kConsoleLogger;
-        } else if (strcmp(val, "file") == 0) {
+        }
+        else if (strcmp(val, "file") == 0) {
             s_logger |= kFileLogger;
-        } else {
+        }
+        else {
             fprintf(stderr, "ERROR: loggerconf: Invalid logger: `%s`\n", val);
             s_logger = 0;
         }
-    } else if (strcmp(key, "logger.console.output") == 0) {
+    }
+    else if (strcmp(key, "logger.console.output") == 0) {
         if (strcmp(val, "stdout") == 0) {
-            s_clog.output = stdout;
-        } else if (strcmp(val, "stderr") == 0) {
-            s_clog.output = stderr;
-        } else {
-            fprintf(stderr, "ERROR: loggerconf: Invalid logger.console.output: `%s`\n", val);
-            s_clog.output = NULL;
+            m_filepoint = stdout;
         }
-    } else if (strcmp(key, "logger.file.filename") == 0) {
-        strncpy(s_flog.filename, val, sizeof(s_flog.filename));
-    } else if (strcmp(key, "logger.file.maxFileSize") == 0) {
-        s_flog.maxFileSize = atol(val);
-    } else if (strcmp(key, "logger.file.maxBackupFiles") == 0) {
-        nfiles = atoi(val);
+        else if (strcmp(val, "stderr") == 0) {
+            m_filepoint = stderr;
+        }
+        else {
+            fprintf(stderr, "ERROR: loggerconf: Invalid logger.console.output: `%s`\n", val);
+            m_filepoint = NULL;
+        }
+    }
+    else if (strcmp(key, "logger.file.filename") == 0) {
+        strncpy(m_filename, val, sizeof(m_filename));
+    }
+    else if (strcmp(key, "logger.file.maxFileSize") == 0) {
+        maxFileSize = atol(val);
+    }
+    else if (strcmp(key, "logger.file.maxBackupFiles") == 0) {
+        auto nfiles = atoi(val);
         if (nfiles < 0) {
             fprintf(stderr, "ERROR: loggerconf: Invalid logger.file.maxBackupFiles: `%s`\n", val);
             nfiles = 0;
         }
-        s_flog.maxBackupFiles = nfiles;
+        maxBackupFiles = nfiles;
     }
 }
 
-static LogLevel parseLevel(const char* s)
-{
+LogLevel LoggerConf::parseLevel(const char* s) {
     if (strcmp(s, "TRACE") == 0) {
         return LogLevel_TRACE;
-    } else if (strcmp(s, "DEBUG") == 0) {
+    }
+    else if (strcmp(s, "DEBUG") == 0) {
         return LogLevel_DEBUG;
-    } else if (strcmp(s, "INFO") == 0) {
+    }
+    else if (strcmp(s, "INFO") == 0) {
         return LogLevel_INFO;
-    } else if (strcmp(s, "WARN") == 0) {
+    }
+    else if (strcmp(s, "WARN") == 0) {
         return LogLevel_WARN;
-    } else if (strcmp(s, "ERROR") == 0) {
+    }
+    else if (strcmp(s, "ERROR") == 0) {
         return LogLevel_ERROR;
-    } else if (strcmp(s, "FATAL") == 0) {
+    }
+    else if (strcmp(s, "FATAL") == 0) {
         return LogLevel_FATAL;
-    } else {
+    }
+    else {
         fprintf(stderr, "ERROR: loggerconf: Invalid level: `%s`\n", s);
         return logger_getLevel();
     }
 }
 
-static int hasFlag(int flags, int flag)
-{
+int LoggerConf::hasFlag(int flags, int flag) {
     return (flags & flag) == flag;
 }

@@ -11,6 +11,13 @@ extern "C" {
 
 constexpr int ErrBufferLen = 80;
 
+/* Logger type */
+enum {
+
+    kConsoleLogger = 1 << 0,
+    kFileLogger = 1 << 1
+};
+
 /**
  * \brief Initialize the logger as a console logger.
  * If the file pointer is NULL, stdout will be used.
