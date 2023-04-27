@@ -6,14 +6,14 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <time.h>
-#if defined(_WIN32) || defined(_WIN64)
+#if defined(_WIN32)
  #include <winsock2.h>
 #else
  #include <pthread.h>
  #include <sys/time.h>
  #include <sys/syscall.h>
  #include <unistd.h>
-#endif /* defined(_WIN32) || defined(_WIN64) */
+#endif
 #include "C_logger.h"
 
 const auto kMaxFileNameLen = 255; /* without null character */
@@ -36,49 +36,49 @@ static struct {
 } s_flog;
 
 // A volatile type qualifier means that an object can be modified in the program by the hardware.
-static volatile int s_logger;
-static volatile LogLevel s_logLevel = LogLevel_INFO;
-static volatile long s_flushInterval = 0; /* msec, 0 is auto flush off */
-static volatile int s_initialized = 0; /* false */
+static int s_logger;
+static LogLevel s_logLevel = LogLevel_INFO;
+static long s_flushInterval = 0; /* msec, 0 is auto flush off */
+static int s_initialized = 0; /* false */
 
-#if defined(_WIN32) || defined(_WIN64)
+#if defined(_WIN32)
 static CRITICAL_SECTION s_mutex;
 #else
 static pthread_mutex_t s_mutex;
-#endif /* defined(_WIN32) || defined(_WIN64) */
+#endif
 
 static void init(void)
 {
     if (s_initialized) {
         return;
     }
-#if defined(_WIN32) || defined(_WIN64)
+#if defined(_WIN32)
     InitializeCriticalSection(&s_mutex);
 #else
     pthread_mutex_init(&s_mutex, NULL);
-#endif /* defined(_WIN32) || defined(_WIN64) */
+#endif
     s_initialized = 1; /* true */
 }
 
 static void lock(void)
 {
-#if defined(_WIN32) || defined(_WIN64)
+#if defined(_WIN32)
     EnterCriticalSection(&s_mutex);
 #else
     pthread_mutex_lock(&s_mutex);
-#endif /* defined(_WIN32) || defined(_WIN64) */
+#endif
 }
 
 static void unlock(void)
 {
-#if defined(_WIN32) || defined(_WIN64)
+#if defined(_WIN32)
     LeaveCriticalSection(&s_mutex);
 #else
     pthread_mutex_unlock(&s_mutex);
-#endif /* defined(_WIN32) || defined(_WIN64) */
+#endif
 }
 
-#if defined(_WIN32) || defined(_WIN64)
+#if defined(_WIN32)
 static int gettimeofday(struct timeval* tv, void* tz)
 {
     const UINT64 epochFileTime = 116444736000000000ULL;
@@ -103,11 +103,11 @@ static struct tm* localtime_r(const time_t* timep, struct tm* result)
     localtime_s(result, timep);
     return result;
 }
-#endif /* defined(_WIN32) || defined(_WIN64) */
+#endif
 
 static long getCurrentThreadID(void)
 {
-#if defined(_WIN32) || defined(_WIN64)
+#if defined(_WIN32)
     return GetCurrentThreadId();
 #elif __linux__
     return syscall(SYS_gettid);
@@ -115,8 +115,12 @@ static long getCurrentThreadID(void)
     return syscall(SYS_thread_selfid);
 #else
     return (long) pthread_self();
-#endif /* defined(_WIN32) || defined(_WIN64) */
+#endif
 }
+
+#ifdef __unix
+#define fopen_s(pFile,filename,mode) ((*(pFile))=fopen((filename),  (mode)))==NULL
+#endif
 
 int logger_initConsoleLogger(FILE* output)
 {
@@ -134,23 +138,63 @@ int logger_initConsoleLogger(FILE* output)
     return 1;
 }
 
+#include <iostream>
+#include <fstream>
+
+using namespace std;
+
+// Returns -1 on permission error
+std::ifstream::pos_type getFileSize(const char* filename)
+{
+    std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
+    return in.tellg();
+}
+
+// See: https://cplusplus.com/doc/tutorial/files/
+static long getFileSize_my(const char* filename)
+{
+    std::ifstream::pos_type size{};
+
+    ifstream file(filename, ios::in | ios::binary | ios::ate);
+
+    if (file.is_open())
+    {
+        size = file.tellg();
+        file.close();
+    }
+
+    return size;
+}
 
 
-static long getFileSize(const char* fileName)
+static long getFileSize_org(const char* filename)
+{
+    FILE* fp;
+    long size;
+
+    if ((fp = fopen(filename, "rb")) == NULL) {
+        return 0;
+    }
+    fseek(fp, 0, SEEK_END);
+    size = ftell(fp);
+    fclose(fp);
+    return size;
+}
+
+static long getFileSize_s(const char* fileName)
 {
     FILE* filepoint = nullptr;
     errno_t err = 0;
     long size = 0;
     char buffer[ErrBufferLen + 1]{};
 
-    if ((err = fopen_s(&filepoint, fileName, "r")) != 0) {
+    if ((err = fopen_s(&filepoint, fileName, "rb")) != 0) {
         // File could not be opened. filepoint was set to NULL
         // error code is returned in err.
         // error message can be retrieved with strerror(err);
         strerror_s(buffer, ErrBufferLen, err);
-        fprintf(stderr, "cannot open file '%s': %s\n", fileName, buffer);
-        // If your environment insists on using so called secure
-        // functions, use this instead:
+        fprintf(stderr, "ERROR: getFileSize() cannot open file '%s': %s\n", fileName, buffer);
+        // If your environment insists on using so called secure functions, use this instead:
         //      char buf[strerrorlen_s(err) + 1];
         //      strerror_s(buf, sizeof buf, err);
         //      fprintf_s(stderr, "cannot open file '%s': %s\n", fileName, buf);
@@ -179,9 +223,13 @@ int logger_initFileLogger(const char* filename, long maxFileSize, unsigned char 
 
     init();
     lock();
+
     if (s_flog.output != NULL) { /* reinit */
         fclose(s_flog.output);
     }
+
+    // Get current file size when file is not opened yet
+    s_flog.currentFileSize = getFileSize(filename);
 
     errno_t err;
     if ((err = fopen_s(&s_flog.output, filename, "a")) != 0) {
@@ -192,7 +240,7 @@ int logger_initFileLogger(const char* filename, long maxFileSize, unsigned char 
         return 0;
     }
 
-    s_flog.currentFileSize = getFileSize(filename);
+    //s_flog.currentFileSize = getFileSize(filename);
     strncpy(s_flog.filename, filename, sizeof(s_flog.filename));
     s_flog.maxFileSize = (maxFileSize > 0) ? maxFileSize : kDefaultMaxFileSize;
     s_flog.maxBackupFiles = maxBackupFiles;
@@ -261,7 +309,6 @@ static void getTimestamp(const struct timeval* time, char* timestamp, size_t siz
     struct tm calendar {};
     time_t sec = time->tv_sec; /* a necessary variable to avoid a runtime error on Windows */
     
-    auto size1 = strlen(timestamp);
     assert(size >= 25);
 
     // Convert given time since epoch (a time_t value pointed to by timer) into calendar time

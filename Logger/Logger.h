@@ -47,15 +47,14 @@ extern "C" LOGGER_LIBRARY_API typedef enum {
 extern "C" LOGGER_LIBRARY_API int InitConsoleLogger(FILE * output);
 
 /**
-* \brief Initialize the logger as a file logger.
- * If the filename is NULL, return without doing anything.
- *
- * \param[in] filename The name of the output file
- * \param[in] maxFileSize The maximum number of bytes to write to any one file
- * \param[in] maxBackupFiles The maximum number of files for backup
- * \return Non-zero value upon success or 0 on error
-*/
-extern "C" LOGGER_LIBRARY_API int InitFileLogger(const char* filename, long maxFileSize, unsigned char maxBackupFiles);
+  * \brief Initialize logging to file - opens a log file and gets the current size . 
+  *  
+  * \param[in] filename The name of the output log file
+  * \param[in] maxFileSize The maximum number of bytes to write to any one file
+  * \param[in] maxBackupFiles The maximum number of files for backup
+  * \return Non-zero value upon success or 0 on error
+  */
+extern "C" LOGGER_LIBRARY_API int InitFileLogger(const char* filename, long maxFileSize = 1024 * 1024, unsigned char maxBackupFiles = 5);
 
 /**
   * \brief Set the log level.
