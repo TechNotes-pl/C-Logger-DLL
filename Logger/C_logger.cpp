@@ -6,8 +6,6 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <time.h>
-//#include "ConsoleLogger.h"
-//#include "FileLogger.h"
 
 #if defined(_WIN32)
  #include <winsock2.h>
@@ -63,15 +61,14 @@ long getCurrentThreadID(void)
 #define fopen_s(pFile,filename,mode) ((*(pFile))=fopen((filename),  (mode)))==NULL
 #endif
 
-
-
 #include <iostream>
 #include <fstream>
 
 using namespace std;
 
+/*
 // Returns -1 on permission error
-std::ifstream::pos_type getFileSize_c(const char* filename)
+std::ifstream::pos_type getFileSize1(const char* filename)
 {
     std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
     return in.tellg();
@@ -107,6 +104,7 @@ long getFileSize_org(const char* filename)
     fclose(fp);
     return size;
 }
+*/
 
 long getFileSize(const char* fileName)
 {
@@ -153,7 +151,6 @@ char getLevelChar(LogLevel level)
 
 void getTimestamp(const struct timeval* time, char* timestamp, size_t size)
 {
-    //char buffer[ErrBufferLen + 1]{};
     struct tm calendar {};
     time_t sec = time->tv_sec; /* a necessary variable to avoid a runtime error on Windows */
     
@@ -164,21 +161,21 @@ void getTimestamp(const struct timeval* time, char* timestamp, size_t size)
     // Create timestamp string
     strftime(timestamp, size, "%y-%m-%d %H:%M:%S", &calendar);
     // Add microsecons
-    sprintf(&timestamp[17], ".%06ld", (long) time->tv_usec);
+    const auto current_size = strlen(timestamp);
+    sprintf_s(&timestamp[current_size], size - current_size, ".%06ld", (long)time->tv_usec);
 }
 
+// Copy basename to backup name an append index
 void getBackupFileName(const char* basename, unsigned char index, char* backupname, size_t size)
 {
-    char indexname[5];
+    const int MAX_INDEX_LEN = 5;
+    char indexname[MAX_INDEX_LEN]{};
 
     assert(size >= strlen(basename) + sizeof(indexname));
 
-    strncpy(backupname, basename, size);
+    strncpy_s(backupname, strlen(basename), basename, size);
     if (index > 0) {
-        //sprintf(indexname, ".%d", index);
-        //strncat(backupname, indexname, strlen(indexname));
         sprintf_s(indexname, ".%d", index);
-        strncat(backupname, indexname, strlen(indexname));
+        strncat_s(backupname, strlen(indexname), indexname, size);
     }
 }
-

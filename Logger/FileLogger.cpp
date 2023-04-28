@@ -23,7 +23,7 @@ static int isFileExist(const char* fileName)
 }
 
 
-int FileLogger::logger_initFileLogger(const char* fileName, long maxFileSize, unsigned char maxBackupFiles)
+int FileLogger::logger_initFileLogger(const char* fileName, long maxFileSize, int maxBackupFiles)
 {
     if (fileName == NULL) {
         assert(0 && "filename must not be NULL");
@@ -53,7 +53,7 @@ int FileLogger::logger_initFileLogger(const char* fileName, long maxFileSize, un
         return 0;
     }
 
-    strncpy(filename, fileName, sizeof(filename));
+    strncpy_s(filename, fileName, sizeof(filename));
     maxFileSize = (maxFileSize > 0) ? maxFileSize : kDefaultMaxFileSize;
     maxBackupFiles = maxBackupFiles;
 
@@ -72,7 +72,7 @@ void FileLogger::logger_log(LogLevel level, const char* file, int line, const ch
     char timestamp[tmsBuffLen]{};
     const long threadID = getCurrentThreadID();
 
-    if (isInitialized && logger_isEnabled(level))
+    if (isInitialized() && logger_isEnabled(level))
     {
         gettimeofday(&now, NULL);
         currentTime = static_cast<unsigned long long>(now.tv_sec) * 1000 + now.tv_usec / 1000;
@@ -93,9 +93,9 @@ void FileLogger::logger_log(LogLevel level, const char* file, int line, const ch
 
 int FileLogger::rotateLogFiles()
 {
-    int i;
     /* backup filename: <filename>.xxx (xxx: 1-255) */
-    char src[kMaxFileNameLen + 5], dst[kMaxFileNameLen + 5]; /* with null character */
+    char src[kMaxFileNameLen + 5]{};
+    char dst[kMaxFileNameLen + 5]{}; /* with null character */
 
     if (currentFileSize < maxFileSize) {
         return output != NULL;
@@ -103,7 +103,7 @@ int FileLogger::rotateLogFiles()
 
     fclose(output);
 
-    for (i = (int)maxBackupFiles; i > 0; i--) {
+    for (int i = maxBackupFiles; i > 0; i--) {
         getBackupFileName(filename, i - 1, src, sizeof(src));
         getBackupFileName(filename, i, dst, sizeof(dst));
         if (isFileExist(dst)) {
@@ -118,15 +118,15 @@ int FileLogger::rotateLogFiles()
         }
     }
 
+    currentFileSize = getFileSize(filename);
 
     errno_t err;
-
     if ((err = fopen_s(&output, filename, "a")) != 0) {
         char buffer[ErrBufferLen + 1]{};
         strerror_s(buffer, ErrBufferLen, err);
         fprintf(stderr, "ERROR: logger: Failed to open file '%s': %s\n", filename, buffer);
         return 0;
     }
-    currentFileSize = getFileSize(filename);
+
     return 1;
 }

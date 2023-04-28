@@ -9,19 +9,24 @@ bool file_log = false;
 ConsoleLogger clog;
 FileLogger flog;
 
-int InitConsoleLogger(FILE* output) {
+int InitConsoleLogger(FILE* output) 
+{
 	console_log = true;
-	return ConsoleLogger::logger_initConsoleLogger(output);
+	return clog.logger_initConsoleLogger(output);
 }
 
-int InitFileLogger(const char* filename, long maxFileSize, unsigned char maxBackupFiles)
+int InitFileLogger(const char* filename, long maxFileSize, int maxBackupFiles)
 {
 	file_log = true;
-	return FileLogger::logger_initFileLogger(filename, maxFileSize, maxBackupFiles);
+	return flog.logger_initFileLogger(filename, maxFileSize, maxBackupFiles);
 }
 
-void SetLevel(LogLevel level) {
-	LoggerBase::logger_setLevel(level);
+void SetLevel(LogLevel level) 
+{
+	if(console_log)
+		clog.logger_setLevel(level);
+	if (file_log)
+		flog.logger_setLevel(level);
 }
 
 void LoggerLog(LogLevel level, const char* file, int line, const char* fmt, ...)

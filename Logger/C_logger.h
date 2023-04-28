@@ -7,7 +7,7 @@ extern "C" {
 
 #include <stdio.h>
 #include <string.h>
-#include "Logger.h";
+#include "Logger.h"
 
 constexpr int ErrBufferLen = 80;
 const auto kMaxFileNameLen = 255; /* without null character */

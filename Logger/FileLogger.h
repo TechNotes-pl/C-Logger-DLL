@@ -5,15 +5,19 @@ class FileLogger :
     public LoggerBase
 {
 public:
-    inline static char filename[kMaxFileNameLen + 1];
-    inline static long maxFileSize;
-    inline static unsigned char maxBackupFiles;
-    inline static long currentFileSize;
 
-    static int logger_initFileLogger(const char* filename, long maxFileSize, unsigned char maxBackupFiles);
+    int logger_initFileLogger(const char* filename, long maxFileSize, int maxBackupFiles);
 
     void logger_log(LogLevel level, const char* file, int line, const char* fmt, va_list arg) override;
 
-    static int rotateLogFiles();
+private:
+    int rotateLogFiles();
+
+private:
+    long currentFileSize{};
+    char filename[kMaxFileNameLen + 1]{};
+    long maxFileSize{};
+    int maxBackupFiles{};
+    
 };
 

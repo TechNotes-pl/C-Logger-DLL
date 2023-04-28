@@ -29,7 +29,7 @@ void ConsoleLogger::logger_log(LogLevel level, const char* file, int line, const
     char timestamp[tmsBuffLen]{};
     const long threadID = getCurrentThreadID();
 
-    if (isInitialized && logger_isEnabled(level))
+    if (isInitialized() && logger_isEnabled(level))
     {
         gettimeofday(&now, NULL);
         currentTime = static_cast<unsigned long long>(now.tv_sec) * 1000 + now.tv_usec / 1000;
