@@ -6,6 +6,9 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <time.h>
+//#include "ConsoleLogger.h"
+//#include "FileLogger.h"
+
 #if defined(_WIN32)
  #include <winsock2.h>
 #else
@@ -16,70 +19,8 @@
 #endif
 #include "C_logger.h"
 
-const auto kMaxFileNameLen = 255; /* without null character */
-const auto kDefaultMaxFileSize = 1048576L; /* 1 MB */
-
-/* Console logger */
-static struct {
-    FILE* output;
-    unsigned long long flushedTime;
-} s_clog;
-
-/* File logger */
-static struct {
-    FILE* output;
-    char filename[kMaxFileNameLen + 1];
-    long maxFileSize;
-    unsigned char maxBackupFiles;
-    long currentFileSize;
-    unsigned long long flushedTime;
-} s_flog;
-
-// A volatile type qualifier means that an object can be modified in the program by the hardware.
-static int s_logger;
-static LogLevel s_logLevel = LogLevel_INFO;
-static long s_flushInterval = 0; /* msec, 0 is auto flush off */
-static int s_initialized = 0; /* false */
-
 #if defined(_WIN32)
-static CRITICAL_SECTION s_mutex;
-#else
-static pthread_mutex_t s_mutex;
-#endif
-
-static void init(void)
-{
-    if (s_initialized) {
-        return;
-    }
-#if defined(_WIN32)
-    InitializeCriticalSection(&s_mutex);
-#else
-    pthread_mutex_init(&s_mutex, NULL);
-#endif
-    s_initialized = 1; /* true */
-}
-
-static void lock(void)
-{
-#if defined(_WIN32)
-    EnterCriticalSection(&s_mutex);
-#else
-    pthread_mutex_lock(&s_mutex);
-#endif
-}
-
-static void unlock(void)
-{
-#if defined(_WIN32)
-    LeaveCriticalSection(&s_mutex);
-#else
-    pthread_mutex_unlock(&s_mutex);
-#endif
-}
-
-#if defined(_WIN32)
-static int gettimeofday(struct timeval* tv, void* tz)
+int gettimeofday(struct timeval* tv, void* tz)
 {
     const UINT64 epochFileTime = 116444736000000000ULL;
     FILETIME ft;
@@ -105,7 +46,7 @@ static struct tm* localtime_r(const time_t* timep, struct tm* result)
 }
 #endif
 
-static long getCurrentThreadID(void)
+long getCurrentThreadID(void)
 {
 #if defined(_WIN32)
     return GetCurrentThreadId();
@@ -118,25 +59,11 @@ static long getCurrentThreadID(void)
 #endif
 }
 
-#ifdef __unix
+#ifdef __linux__
 #define fopen_s(pFile,filename,mode) ((*(pFile))=fopen((filename),  (mode)))==NULL
 #endif
 
-int logger_initConsoleLogger(FILE* output)
-{
-    output = (output != NULL) ? output : stdout;
-    if (output != stdout && output != stderr) {
-        assert(0 && "output must be stdout or stderr");
-        return 0;
-    }
 
-    init();
-    lock();
-    s_clog.output = output;
-    s_logger |= kConsoleLogger;
-    unlock();
-    return 1;
-}
 
 #include <iostream>
 #include <fstream>
@@ -144,14 +71,14 @@ int logger_initConsoleLogger(FILE* output)
 using namespace std;
 
 // Returns -1 on permission error
-std::ifstream::pos_type getFileSize(const char* filename)
+std::ifstream::pos_type getFileSize_c(const char* filename)
 {
     std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
     return in.tellg();
 }
 
 // See: https://cplusplus.com/doc/tutorial/files/
-static long getFileSize_my(const char* filename)
+long getFileSize_my(const char* filename)
 {
     std::ifstream::pos_type size{};
 
@@ -167,7 +94,7 @@ static long getFileSize_my(const char* filename)
 }
 
 
-static long getFileSize_org(const char* filename)
+long getFileSize_org(const char* filename)
 {
     FILE* fp;
     long size;
@@ -181,7 +108,7 @@ static long getFileSize_org(const char* filename)
     return size;
 }
 
-static long getFileSize_s(const char* fileName)
+long getFileSize(const char* fileName)
 {
     FILE* filepoint = nullptr;
     errno_t err = 0;
@@ -210,87 +137,8 @@ static long getFileSize_s(const char* fileName)
     return size;
 }
 
-int logger_initFileLogger(const char* filename, long maxFileSize, unsigned char maxBackupFiles)
-{
-    if (filename == NULL) {
-        assert(0 && "filename must not be NULL");
-        return 0;
-    }
-    if (strlen(filename) > kMaxFileNameLen) {
-        assert(0 && "filename exceeds the maximum number of characters");
-        return 0;
-    }
 
-    init();
-    lock();
-
-    if (s_flog.output != NULL) { /* reinit */
-        fclose(s_flog.output);
-    }
-
-    // Get current file size when file is not opened yet
-    s_flog.currentFileSize = getFileSize(filename);
-
-    errno_t err;
-    if ((err = fopen_s(&s_flog.output, filename, "a")) != 0) {
-        char buffer[ErrBufferLen + 1]{};
-        strerror_s(buffer, ErrBufferLen, err);
-        fprintf(stderr, "ERROR: logger: Failed to open file '%s': %s\n", filename, buffer);
-        unlock();
-        return 0;
-    }
-
-    //s_flog.currentFileSize = getFileSize(filename);
-    strncpy(s_flog.filename, filename, sizeof(s_flog.filename));
-    s_flog.maxFileSize = (maxFileSize > 0) ? maxFileSize : kDefaultMaxFileSize;
-    s_flog.maxBackupFiles = maxBackupFiles;
-    s_logger |= kFileLogger;
-
-    unlock();
-    return 1;
-}
-
-void logger_setLevel(LogLevel level)
-{
-    s_logLevel = level;
-}
-
-LogLevel logger_getLevel(void)
-{
-    return s_logLevel;
-}
-
-int logger_isEnabled(LogLevel level)
-{
-    return s_logLevel <= level;
-}
-
-void logger_autoFlush(long interval)
-{
-    s_flushInterval = interval > 0 ? interval : 0;
-}
-
-static int hasFlag(int flags, int flag)
-{
-    return (flags & flag) == flag;
-}
-
-void logger_flush()
-{
-    if (s_logger == 0 || !s_initialized) {
-        assert(0 && "logger is not initialized");
-        return;
-    }
-
-    if (hasFlag(s_logger, kConsoleLogger)) {
-        fflush(s_clog.output);
-    }
-    if (hasFlag(s_logger, kFileLogger)) {
-        fflush(s_flog.output);
-    }
-}
-
-static char getLevelChar(LogLevel level)
+char getLevelChar(LogLevel level)
 {
     switch (level) {
         case LogLevel_TRACE: return 'T';
@@ -303,7 +151,7 @@ static char getLevelChar(LogLevel level)
     }
 }
 
-static void getTimestamp(const struct timeval* time, char* timestamp, size_t size)
+void getTimestamp(const struct timeval* time, char* timestamp, size_t size)
 {
     //char buffer[ErrBufferLen + 1]{};
     struct tm calendar {};
@@ -319,7 +167,7 @@ static void getTimestamp(const struct timeval* time, char* timestamp, size_t siz
     sprintf(&timestamp[17], ".%06ld", (long) time->tv_usec);
 }
 
-static void getBackupFileName(const char* basename, unsigned char index, char* backupname, size_t size)
+void getBackupFileName(const char* basename, unsigned char index, char* backupname, size_t size)
 {
     char indexname[5];
 
@@ -332,124 +180,5 @@ static void getBackupFileName(const char* basename, unsigned char index, char* b
         sprintf_s(indexname, ".%d", index);
         strncat(backupname, indexname, strlen(indexname));
     }
-}
-
-static int isFileExist(const char* fileName)
-{
-    FILE* filepoint = nullptr;
-    errno_t err = 0;
-
-    if ((err = fopen_s(&filepoint, fileName, "r")) != 0) 
-    {
-        return 0;
-    }
-    else 
-    {
-        fclose(filepoint);
-        return 1;
-    }
-}
-
-static int rotateLogFiles()
-{
-    int i;
-    /* backup filename: <filename>.xxx (xxx: 1-255) */
-    char src[kMaxFileNameLen + 5], dst[kMaxFileNameLen + 5]; /* with null character */
-
-    if (s_flog.currentFileSize < s_flog.maxFileSize) {
-        return s_flog.output != NULL;
-    }
-    fclose(s_flog.output);
-    for (i = (int) s_flog.maxBackupFiles; i > 0; i--) {
-        getBackupFileName(s_flog.filename, i - 1, src, sizeof(src));
-        getBackupFileName(s_flog.filename, i, dst, sizeof(dst));
-        if (isFileExist(dst)) {
-            if (remove(dst) != 0) {
-                fprintf(stderr, "ERROR: logger: Failed to remove file: `%s`\n", dst);
-            }
-        }
-        if (isFileExist(src)) {
-            if (rename(src, dst) != 0) {
-                fprintf(stderr, "ERROR: logger: Failed to rename file: `%s` -> `%s`\n", src, dst);
-            }
-        }
-    }
-
-
-    errno_t err;
-
-    if ((err = fopen_s(&s_flog.output, s_flog.filename, "a")) != 0) {
-        char buffer[ErrBufferLen + 1]{};
-        strerror_s(buffer, ErrBufferLen, err);
-        fprintf(stderr, "ERROR: logger: Failed to open file '%s': %s\n", s_flog.filename, buffer);
-        return 0;
-    }
-    s_flog.currentFileSize = getFileSize(s_flog.filename);
-    return 1;
-}
-
-static long vflog(FILE* fp, char levelc, const char* timestamp, long threadID,
-        const char* file, int line, const char* fmt, va_list arg,
-        unsigned long long currentTime, unsigned long long* flushedTime)
-{
-    int size;
-    long totalsize = 0;
-
-    if ((size = fprintf(fp, "%c %s %ld %s:%d: ", levelc, timestamp, threadID, file, line)) > 0) {
-        totalsize += size;
-    }
-    if ((size = vfprintf(fp, fmt, arg)) > 0) {
-        totalsize += size;
-    }
-    if ((size = fprintf(fp, "\n")) > 0) {
-        totalsize += size;
-    }
-    if (s_flushInterval > 0) {
-        if (currentTime - *flushedTime > s_flushInterval) {
-            fflush(fp);
-            *flushedTime = currentTime;
-        }
-    }
-    return totalsize;
-}
-
-void logger_log(LogLevel level, const char* file, int line, const char* fmt, va_list arg)
-{
-    struct timeval now {};
-    unsigned long long currentTime{}; /* milliseconds */
-    char levelc{};
-    const auto tmsBuffLen = 32;
-    char timestamp[tmsBuffLen]{};
-    const long threadID = getCurrentThreadID();
-
-    if (s_logger == 0 || !s_initialized) {
-        assert(0 && "logger is not initialized");
-        return;
-    }
-
-    if (!logger_isEnabled(level)) {
-        return;
-    }
-
-    gettimeofday(&now, NULL);
-    currentTime = static_cast<unsigned long long>(now.tv_sec) * 1000 + now.tv_usec / 1000;
-    levelc = getLevelChar(level);
-    getTimestamp(&now, timestamp, tmsBuffLen);
-
-    lock();
-
-    if (hasFlag(s_logger, kConsoleLogger)) {
-        vflog(s_clog.output, levelc, timestamp, threadID,
-                file, line, fmt, arg, currentTime, &s_clog.flushedTime);
-    }
-
-    if (hasFlag(s_logger, kFileLogger)) {
-        if (rotateLogFiles()) {
-            s_flog.currentFileSize += vflog(s_flog.output, levelc, timestamp, threadID,
-                    file, line, fmt, arg, currentTime, &s_flog.flushedTime);
-        }
-    }
-
-    unlock();
 }
 

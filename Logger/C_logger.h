@@ -10,13 +10,22 @@ extern "C" {
 #include "Logger.h";
 
 constexpr int ErrBufferLen = 80;
+const auto kMaxFileNameLen = 255; /* without null character */
+const auto kDefaultMaxFileSize = 1048576L; /* 1 MB */
 
-/* Logger type */
-enum {
+void lock(void);
+void unlock(void);
 
-    kConsoleLogger = 1 << 0,
-    kFileLogger = 1 << 1
-};
+#if defined(_WIN32)
+int gettimeofday(struct timeval* tv, void* tz);
+struct tm* localtime_r(const time_t* timep, struct tm* result);
+#endif
+long getCurrentThreadID(void);
+//std::ifstream::pos_type getFileSize(const char* filename);
+long getFileSize(const char* filename);
+char getLevelChar(LogLevel level);
+void getBackupFileName(const char* basename, unsigned char index, char* backupname, size_t size);
+void getTimestamp(const struct timeval* time, char* timestamp, size_t size);
 
 /**
  * \brief Initialize the logger as a console logger.
@@ -25,7 +34,7 @@ enum {
  * @param[in] output A file pointer. Make sure to set stdout or stderr.
  * @return Non-zero value upon success or 0 on error
  */
-int logger_initConsoleLogger(FILE* output);
+//int logger_initConsoleLogger(FILE* output);
 
 /**
  * \brief Initialize the logger as a file logger.
@@ -36,7 +45,7 @@ int logger_initConsoleLogger(FILE* output);
  * @param[in] maxBackupFiles The maximum number of files for backup
  * @return Non-zero value upon success or 0 on error
  */
-int logger_initFileLogger(const char* filename, long maxFileSize, unsigned char maxBackupFiles);
+//int logger_initFileLogger(const char* filename, long maxFileSize, unsigned char maxBackupFiles);
 
 /**
  * \brief Set the log level.
@@ -45,7 +54,7 @@ int logger_initFileLogger(const char* filename, long maxFileSize, unsigned char 
  *
  * @param[in] level A log level
  */
-void logger_setLevel(LogLevel level);
+//void logger_setLevel(LogLevel level);
 
 /**
  * \brief Get the log level that has been set.
@@ -53,14 +62,14 @@ void logger_setLevel(LogLevel level);
  *
  * @return The log level
  */
-LogLevel logger_getLevel(void);
+//LogLevel logger_getLevel(void);
 
 /**
  * \brief Check if a message of the level would actually be logged.
  *
  * @return Non-zero value if the log level is enabled
  */
-int logger_isEnabled(LogLevel level);
+//int logger_isEnabled(LogLevel level);
 
 /**
  * \brief Flush automatically.
@@ -68,12 +77,7 @@ int logger_isEnabled(LogLevel level);
  *
  * @param[in] interval A fulsh interval in milliseconds. Switch off if 0 or a negative integer.
  */
-void logger_autoFlush(long interval);
-
-/**
- * \brief Flush buffered log messages.
- */
-void logger_flush(void);
+//void logger_autoFlush(long interval);
 
 /**
  * \brief Log a message.
@@ -87,7 +91,7 @@ void logger_flush(void);
  * @param[in] fmt A format string
  * @param[in] ... Additional arguments
  */
-void logger_log(LogLevel level, const char* file, int line, const char* fmt, va_list arg);
+//void logger_log(LogLevel level, const char* file, int line, const char* fmt, va_list arg);
 
 #ifdef __cplusplus
 } /* extern "C" */
