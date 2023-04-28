@@ -7,14 +7,11 @@ extern "C" {
 
 #include <stdio.h>
 #include <string.h>
-#include "Logger.h";
+#include "Logger.h"
 
 constexpr int ErrBufferLen = 80;
 const auto kMaxFileNameLen = 255; /* without null character */
 const auto kDefaultMaxFileSize = 1048576L; /* 1 MB */
-
-void lock(void);
-void unlock(void);
 
 #if defined(_WIN32)
 int gettimeofday(struct timeval* tv, void* tz);

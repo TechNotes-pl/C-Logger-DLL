@@ -54,7 +54,7 @@ extern "C" LOGGER_LIBRARY_API int InitConsoleLogger(FILE * output);
   * \param[in] maxBackupFiles The maximum number of files for backup
   * \return Non-zero value upon success or 0 on error
   */
-extern "C" LOGGER_LIBRARY_API int InitFileLogger(const char* filename, long maxFileSize = 1024 * 1024, unsigned char maxBackupFiles = 5);
+extern "C" LOGGER_LIBRARY_API int InitFileLogger(const char* filename, long maxFileSize = 1024 * 1024, int maxBackupFiles = 5);
 
 /**
   * \brief Set the log level.
